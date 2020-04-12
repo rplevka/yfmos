@@ -318,42 +318,45 @@ Available commands:
 
     def __gen_B0(self, command, repeat, profile, callback):
         # TODO: check for existing CONFIG_FILE
-        config = SafeConfigParser()
-        config.read(self.CONFIG_FILE)
-        if not config.has_section(profile):
-            raise NameError('Profile "%s" not found' % profile)
-        buckets = map(int, config.get(profile, 'buckets').split(','))
-        device = int(config.get(profile, 'Device'), 0)
-        rollingCode = config.getint(profile, 'RollingCode') + 1
-        longPulse = config.get(profile, 'Long')
-        shortPulse = config.get(profile, 'Short')
-        hwSync = config.get(profile, 'HWSync')
-        swSync = config.get(profile, 'SWSync')
+        while True:
+            config = SafeConfigParser()
+            config.read(self.CONFIG_FILE)
+            if not config.has_section(profile):
+                raise NameError('Profile "%s" not found' % profile)
+            buckets = map(int, config.get(profile, 'buckets').split(','))
+            device = int(config.get(profile, 'Device'), 0)
+            rollingCode = config.getint(profile, 'RollingCode') + 1
+            longPulse = config.get(profile, 'Long')
+            shortPulse = config.get(profile, 'Short')
+            hwSync = config.get(profile, 'HWSync')
+            swSync = config.get(profile, 'SWSync')
 
-        payload = self.__gen_payload(command, rollingCode, device)
-        payload = self.__calc_checksum(payload)
-        self.__printFrame(payload)
-        payload = self.__obfuscate(payload)
-        bitvec = self.__to_bitvec(payload)
+            payload = self.__gen_payload(command, rollingCode, device)
+            payload = self.__calc_checksum(payload)
+            self.__printFrame(payload)
+            payload = self.__obfuscate(payload)
+            bitvec = self.__to_bitvec(payload)
 
-        encoder = ManchesterEncode()
-        encoder.init(longPulse, shortPulse)
-        encoder.addData(bitvec)
-        dataStr = encoder.get_encoded()
-        # FIXME: generate HWSync/SWSync string
-        tmpStr = '05 %02X %04X %04X %04X %04X %04X %s%s%s%s4' % (
-            repeat, buckets[0], buckets[1], buckets[2], buckets[3], buckets[4],
-            hwSync * 14, swSync, longPulse, dataStr)
-        strLen = int(len(tmpStr.replace(' ', '')) / 2)
+            encoder = ManchesterEncode()
+            encoder.init(longPulse, shortPulse)
+            encoder.addData(bitvec)
+            dataStr = encoder.get_encoded()
+            # FIXME: generate HWSync/SWSync string
+            tmpStr = '05 %02X %04X %04X %04X %04X %04X %s%s%s%s4' % (
+                repeat, buckets[0], buckets[1], buckets[2], buckets[3], buckets[4],
+                hwSync * 14, swSync, longPulse, dataStr)
+            strLen = int(len(tmpStr.replace(' ', '')) / 2)
 
-        b0String = 'RfRaw AA B0 %02X %s 55' % (strLen, tmpStr)
-        if self.debug:
-            logging.debug(b0String)
-        callback(b0String, config, profile)
+            b0String = 'RfRaw AA B0 %02X %s 55' % (strLen, tmpStr)
+            if self.debug:
+                logging.debug(b0String)
 
-        config.set(profile, 'RollingCode', str(rollingCode))
-        with open(self.CONFIG_FILE, 'wb') as configfile:
-            config.write(configfile)
+            config.set(profile, 'RollingCode', str(rollingCode))
+            with open(self.CONFIG_FILE, 'wb') as configfile:
+                config.write(configfile)
+            if not len(encoder.encoded) % 2:
+                callback(b0String, config, profile)
+                break
 
     def __print_B0(self, b0, config, profile):
         print(b0)
